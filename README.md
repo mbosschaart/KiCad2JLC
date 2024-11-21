@@ -1,8 +1,8 @@
-KiCad to JLCPCB Converter
+##KiCad to JLCPCB Converter
 
 This script converts Bill of Materials (BOM) and Component Placement List (CPL) files exported from KiCad into formats compatible with JLCPCB's requirements. It reads the BOM and CPL files, processes them, and outputs CSV files that can be directly used for PCB assembly by JLCPCB.
 
-Features
+##Features
 
 Converts KiCad BOM and CPL (POS) files into JLCPCB-compatible formats.
 
@@ -10,7 +10,7 @@ Handles specific adjustments like converting -90 rotation to 270.
 
 Provides validation to ensure the output files meet JLCPCB's formatting standards.
 
-Requirements
+##Requirements
 
 Python 3.x
 
@@ -20,7 +20,7 @@ Install the required packages using:
 
 pip install pandas
 
-Usage
+##Usage
 
 To use this script, run it from the command line with the following arguments:
 
@@ -40,7 +40,7 @@ jlcpcb_bom.csv: The BOM file formatted for JLCPCB.
 
 jlcpcb_cpl.csv: The CPL file formatted for JLCPCB.
 
-Output File Format
+##Output File Format
 
 BOM Output (jlcpcb_bom.csv):
 
@@ -50,7 +50,7 @@ CPL Output (jlcpcb_cpl.csv):
 
 Designator, Mid X, Mid Y, Rotation, Layer
 
-Notes
+##Notes
 
 The script converts any -90 rotation values to 270 to match JLCPCB's expectations.
 
