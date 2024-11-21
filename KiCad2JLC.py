@@ -2,6 +2,9 @@ import csv
 import os
 import argparse
 import re
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 def parse_bom_file(bom_filename):
     components = []
@@ -9,18 +12,24 @@ def parse_bom_file(bom_filename):
         reader = csv.DictReader(bom_file)
         header_mapping = {
             'reference': ['Reference', 'reference', 'designator'],
-            'quantity': ['Quantity', 'quantity', 'qty'],
+            'quantity': ['Quantity', 'quantity', 'qty', 'Mfg Qty'],
             'value': ['Value', 'value'],
             'footprint': ['Footprint', 'footprint'],
             'part_number': ['Mfg Part #', 'part_number', 'Part Number', 'mpn'],
             'designation': ['Designation', 'designation']
         }
+
         for row in reader:
-            component = {
-                key: row.get(next((alias for alias in aliases if alias in row), ''), '')
-                for key, aliases in header_mapping.items()
-            }
+            component = {}
+            for key, aliases in header_mapping.items():
+                for alias in aliases:
+                    if alias in row:
+                        component[key] = row[alias]
+                        break
+                else:
+                    component[key] = ''  # Default to empty if not found
             components.append(component)
+
     return components
 
 def parse_pos_file(pos_filename):
@@ -32,7 +41,7 @@ def parse_pos_file(pos_filename):
             'pos_y': ['pos_y', 'PosY', 'y', 'Mid Y'],
             'rotation': ['rotation', 'Rotation'],
             'side': ['side', 'Side'],
-            'designator': ['designator', 'Designator', 'reference']
+            'reference': ['designator', 'Designator', 'reference']
         }
         for row in reader:
             try:
@@ -41,7 +50,7 @@ def parse_pos_file(pos_filename):
                     for key, aliases in header_mapping.items()
                 }
                 if any(value == '' for value in parsed_row.values()):
-                    print(f"Error: Missing expected columns in row: {row}")
+                    logging.info(f"Error: Missing expected columns in row: {row}")
                     continue
 
                 x = round(float(parsed_row['pos_x']), 2)
@@ -53,7 +62,7 @@ def parse_pos_file(pos_filename):
                 layer = parsed_row['side'].strip().lower()
                 layer = 'top' if layer not in ['top', 'bottom'] else layer
                 placement = {
-                    'reference': parsed_row['designator'],
+                    'reference': parsed_row['reference'],
                     'x': x,
                     'y': y,
                     'rotation': rotation,
@@ -61,12 +70,28 @@ def parse_pos_file(pos_filename):
                 }
                 placements.append(placement)
             except ValueError as e:
-                print(f"Error parsing row: {row}, Error: {e}")
+                logging.info(f"Error parsing row: {row}, Error: {e}")
     return placements
 
 def convert_to_jlcpcb_bom(bom_components):
-    jlcpcb_bom_data = []
+    grouped_components = {}
     for component in bom_components:
+        key = (component['value'], component['footprint'], component['part_number'])
+        if key not in grouped_components:
+            grouped_components[key] = {
+                'reference': component['reference'],
+                'quantity': int(component['quantity']) if component['quantity'].isdigit() else 1,
+                'value': component['value'],
+                'footprint': component['footprint'],
+                'part_number': component['part_number']
+            }
+        else:
+            grouped_components[key]['reference'] += f", {component['reference']}"
+            if component['quantity'].isdigit():
+                grouped_components[key]['quantity'] += int(component['quantity'])
+
+    jlcpcb_bom_data = []
+    for component in grouped_components.values():
         jlcpcb_component = [
             component['reference'],
             component['quantity'],
@@ -75,11 +100,15 @@ def convert_to_jlcpcb_bom(bom_components):
             component['part_number'],
         ]
         jlcpcb_bom_data.append(jlcpcb_component)
+
     return jlcpcb_bom_data
 
 def convert_to_jlcpcb_cpl(placements):
     jlcpcb_cpl_data = []
     for placement in placements:
+        if 'reference' not in placement or not placement['reference']:
+            logging.warning(f"Skipping placement due to missing 'reference' key: {placement}")
+            continue
         jlcpcb_placement = [
             placement['reference'],
             f"{placement['x']:.2f}mm",
@@ -92,125 +121,49 @@ def convert_to_jlcpcb_cpl(placements):
 
 def write_csv(filename, data, header):
     if not data:
-        print(f"Warning: No data to write for file {filename}")
+        logging.warning(f"No data to write for file {filename}")
         return
     with open(filename, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(header)
         writer.writerows(data)
-        print(f"Data written to {filename} successfully.")
-
-def validate_jlcpcb_files(bom_filename, cpl_filename):
-    # Validate BOM file
-    if not os.path.exists(bom_filename):
-        print(f"Error: BOM file '{bom_filename}' does not exist.")
-        return False
-    with open(bom_filename, newline='') as bom_file:
-        reader = csv.DictReader(bom_file)
-        bom_headers = ['Designator', 'Quantity', 'Value', 'Footprint', 'Part Number']
-        if set(reader.fieldnames) != set(bom_headers):
-            print(f"Error: BOM file '{bom_filename}' has incorrect headers.")
-            return False
-
-    # Validate CPL file
-    if not os.path.exists(cpl_filename):
-        print(f"Error: CPL file '{cpl_filename}' does not exist.")
-        return False
-    with open(cpl_filename, newline='') as cpl_file:
-        reader = csv.DictReader(cpl_file)
-        cpl_headers = ['Designator', 'Mid X', 'Mid Y', 'Rotation', 'Layer']
-        if reader.fieldnames != cpl_headers:
-            print(f"Error: CPL file '{cpl_filename}' has incorrect headers.")
-            return False
-
-    print("JLCPCB BOM and CPL files are valid.")
-    return True
-
-def determine_file_type(filename):
-    # Updated to handle filenames and various header names
-    # Check file name to infer possible type
-    lower_filename = filename.lower()
-    if 'bom' in lower_filename:
-        expected_headers = {'reference', 'quantity', 'value', 'footprint'}
-    elif 'cpl' in lower_filename or 'pos' in lower_filename:
-        expected_headers = {'pos_x', 'pos_y', 'rotation', 'side', 'designator'}
-    else:
-        expected_headers = None
-
-    with open(filename, newline='') as file:
-        reader = csv.DictReader(file)
-        headers = [re.sub(r'[^a-zA-Z0-9_]', '', header.strip().lower().replace(' ', '_')) for header in reader.fieldnames if header]
-
-        if expected_headers and all(expected in headers for expected in expected_headers if expected in headers):
-            if 'bom' in lower_filename:
-                return 'bom'
-            elif 'cpl' in lower_filename or 'pos' in lower_filename:
-                return 'cpl'
-        elif {'reference', 'value', 'footprint'}.issubset(headers):
-            return 'bom'
-        elif {'pos_x', 'pos_y', 'rotation', 'side', 'designator'}.issubset(headers):
-            return 'cpl'
-        else:
-            print(f"Warning: Unknown file type for file: {filename}. Skipping.")
-            return None
-        bom_headers = {'reference', 'quantity', 'value', 'footprint'}
-        cpl_headers = {'pos_x', 'pos_y', 'rotation', 'side', 'designator'}
-        if bom_headers.issubset(headers):
-            return 'bom'
-        elif cpl_headers.issubset(headers):
-            return 'cpl'
-        else:
-            print(f"Warning: Unknown file type for file: {filename}. Skipping.")
-            return None
-        
+        logging.info(f"Data written to {filename} successfully.")
 
 def main():
-    # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Convert KiCad BOM and POS files to JLCPCB format.')
     parser.add_argument('input_files', nargs='+', help='Path to the input CSV file(s)')
     args = parser.parse_args()
 
-    # Parse input files
     bom_components = []
     placements = []
 
     for filename in args.input_files:
-        file_type = determine_file_type(filename)
-        if file_type is None:
-            continue
-        if file_type == 'bom':
+        if 'bom' in filename.lower():
             bom_components = parse_bom_file(filename)
-        elif file_type == 'cpl':
+        elif 'pos' in filename.lower() or 'cpl' in filename.lower():
             placements = parse_pos_file(filename)
 
     # Convert BOM and CPL to JLCPCB format
-    jlcpcb_bom_data = []
-    jlcpcb_cpl_data = []
-
     if bom_components:
         jlcpcb_bom_data = convert_to_jlcpcb_bom(bom_components)
         jlcpcb_bom_filename = 'jlcpcb_bom.csv'
         jlcpcb_bom_header = ['Designator', 'Quantity', 'Value', 'Footprint', 'Part Number']
         write_csv(jlcpcb_bom_filename, jlcpcb_bom_data, jlcpcb_bom_header)
-        print(f"Processed {len(bom_components)} BOM components.")
+        logging.info(f"Processed {len(bom_components)} BOM components.")
 
     if placements:
         jlcpcb_cpl_data = convert_to_jlcpcb_cpl(placements)
         jlcpcb_cpl_filename = 'jlcpcb_cpl.csv'
         jlcpcb_cpl_header = ['Designator', 'Mid X', 'Mid Y', 'Rotation', 'Layer']
         write_csv(jlcpcb_cpl_filename, jlcpcb_cpl_data, jlcpcb_cpl_header)
-        print(f"Processed {len(placements)} CPL placements.")
+        logging.info(f"Processed {len(placements)} CPL placements.")
 
-    # Validate JLCPCB output files
-    if bom_components and placements:
-        validate_jlcpcb_files('jlcpcb_bom.csv', 'jlcpcb_cpl.csv')
-    
     if bom_components and not placements:
-        print("Conversion to JLCPCB BOM file completed successfully!")
+        logging.info("Conversion to JLCPCB BOM file completed successfully!")
     elif placements and not bom_components:
-        print("Conversion to JLCPCB CPL file completed successfully!")
+        logging.info("Conversion to JLCPCB CPL file completed successfully!")
     else:
-        print("Conversion to JLCPCB BOM and CPL files completed successfully!")
+        logging.info("Conversion to JLCPCB BOM and CPL files completed successfully!")
 
 if __name__ == '__main__':
     main()
