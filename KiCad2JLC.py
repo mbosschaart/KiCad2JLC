@@ -5,45 +5,55 @@ import re
 
 def parse_bom_file(bom_filename):
     components = []
-    with open(bom_filename, newline='') as bom_file:
+    with open(bom_filename, newline='', encoding='utf-8-sig') as bom_file:
         reader = csv.DictReader(bom_file)
+        header_mapping = {
+            'reference': ['Reference', 'reference', 'designator'],
+            'quantity': ['Quantity', 'quantity', 'qty'],
+            'value': ['Value', 'value'],
+            'footprint': ['Footprint', 'footprint'],
+            'part_number': ['Mfg Part #', 'part_number', 'Part Number', 'mpn'],
+            'designation': ['Designation', 'designation']
+        }
         for row in reader:
             component = {
-                'quantity': row.get('Quantity', 1),
-                'reference': row.get('Reference', ''),
-                'value': row.get('Value', ''),
-                'footprint': row.get('Footprint', ''),
-                'part_number': row.get('Mfg Part #', ''),
-                'designation': row.get('Designation', ''),
+                key: row.get(next((alias for alias in aliases if alias in row), ''), '')
+                for key, aliases in header_mapping.items()
             }
             components.append(component)
     return components
 
 def parse_pos_file(pos_filename):
     placements = []
-    with open(pos_filename, newline='') as pos_file:
+    with open(pos_filename, newline='', encoding='utf-8-sig') as pos_file:
         reader = csv.DictReader(pos_file)
+        header_mapping = {
+            'pos_x': ['pos_x', 'PosX', 'x', 'Mid X'],
+            'pos_y': ['pos_y', 'PosY', 'y', 'Mid Y'],
+            'rotation': ['rotation', 'Rotation'],
+            'side': ['side', 'Side'],
+            'designator': ['designator', 'Designator', 'reference']
+        }
         for row in reader:
             try:
-                if '﻿pos_x' not in row or 'pos_y' not in row or 'designator' not in row or 'rotation' not in row or 'side' not in row:
+                parsed_row = {
+                    key: row.get(next((alias for alias in aliases if alias in row), ''), '')
+                    for key, aliases in header_mapping.items()
+                }
+                if any(value == '' for value in parsed_row.values()):
                     print(f"Error: Missing expected columns in row: {row}")
                     continue
 
-                x = round(float(row['﻿pos_x']), 2)
-                y = round(float(row['pos_y']), 2)
-                rotation = int(float(row['rotation']))
+                x = round(float(parsed_row['pos_x']), 2)
+                y = round(float(parsed_row['pos_y']), 2)
+                rotation = int(float(parsed_row['rotation']))
                 # Convert -90 to 270
                 if rotation == -90:
                     rotation = 270
-                layer = row['side'].strip().lower()
-                if layer == 'top':
-                    layer = 'top'
-                elif layer == 'bottom':
-                    layer = 'bottom'
-                else:
-                    layer = 'top'  # Default to top if the value is unrecognized
+                layer = parsed_row['side'].strip().lower()
+                layer = 'top' if layer not in ['top', 'bottom'] else layer
                 placement = {
-                    'reference': row['designator'],
+                    'reference': parsed_row['designator'],
                     'x': x,
                     'y': y,
                     'rotation': rotation,
