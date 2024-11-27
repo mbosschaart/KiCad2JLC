@@ -3,12 +3,12 @@
 This Python script is designed to convert KiCad BOM (Bill of Materials) and POS (Component Placement) files into formats compatible with JLCPCB's requirements. The script supports both BOM and CPL (Component Placement List) files, and it can process one or both files depending on what is provided.
 
 ## Features
-- Converts KiCad BOM files to JLCPCB-compatible CSV format.
-- Converts KiCad POS files to JLCPCB-compatible CSV format.
+- Converts KiCad BOM files to JLCPCB-compatible XLSX format.
+- Converts KiCad POS files to JLCPCB-compatible XLSX format.
 - Automatically detects file types based on filename and headers.
-- Outputs the converted files as `jlcpcb_bom.csv` and `jlcpcb_cpl.csv`.
+- Outputs the converted files as `<name>_JLC.xlsx` and `<name>_JLC.xlsx`.
 - Validates the output files to ensure correctness.
-- Puts the MFg part number in the output BOM for better parts matching, but always check the final match at JLC.
+- Puts the MFg part number in the output BOM for better parts matching if its populated, but always check the final match at JLC.
 
 ## Requirements
 - Python 3.x
@@ -28,7 +28,7 @@ python KiCad2JLC.py <input_file_1> <input_file_2>
 ```sh
 python KiCad2JLC.py kicad_bom.csv kicad_pos.csv
 ```
-This will generate `jlcpcb_bom.csv` and `jlcpcb_cpl.csv` if both BOM and CPL files are provided.
+This will generate `kicad_bom_JLC.xlsx` and `kicad_bom.xlsx` if both BOM and CPL files are provided.
 
 ## Input File Requirements
 The script expects the input files to have the following columns:
@@ -50,16 +50,17 @@ The script expects the input files to have the following columns:
 ## Output Files
 The script generates the following files:
 
-- **jlcpcb_bom.csv**: Contains the BOM information in a format compatible with JLCPCB.
+- **<name>_JLC.xlsx**: Contains the BOM information in a format compatible with JLCPCB.
   - Columns: Designator, Quantity, Value, Footprint, Part Number
 
-- **jlcpcb_cpl.csv**: Contains the CPL information for JLCPCB.
+- **<name>_JLC.xlsx**: Contains the CPL information for JLCPCB.
   - Columns: Designator, Mid X, Mid Y, Rotation, Layer
 
 ## Notes
 - The script automatically detects whether an input file is a BOM or CPL file based on its filename and headers.
 - If only a BOM file or only a CPL file is provided, only the respective output will be generated.
 - The output messages will specify whether a BOM or CPL file was successfully generated.
+- Slight variations of KiCad output files (with different colum headers) can be used. Modify mapping table if needed.
 
 ## Example Output Messages
 - **"Conversion to JLCPCB BOM file completed successfully!"**: Generated only the BOM file.
