@@ -41,8 +41,8 @@ The script expects the input files to have the following columns:
 - **Mfg Part #**: Manufacturer part number, which will be used as the "Part Number" in the output.
 
 ### CPL File (POS File)
-- **pos_x**: X coordinate of the component.
-- **pos_y**: Y coordinate of the component.
+- **Mid X**: X coordinate of the component.
+- **Mid Y**: Y coordinate of the component.
 - **rotation**: Rotation of the component in degrees. (Script converts -90 to 270)
 - **side**: The side of the board where the component is placed (e.g., top or bottom).
 - **designator**: The reference designator for the component.
